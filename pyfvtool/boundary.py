@@ -3,7 +3,7 @@ Boundary condition classes
 """
 
 import numpy as np
-from scipy.sparse import csr_array
+from .versioning import *
 from .mesh import *
 from .utilities import *
 
