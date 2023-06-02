@@ -1,3 +1,20 @@
+"""This module contains functions for averaging node values to face values.
+
+functions:
+    cell_size_array
+    
+    linearMean - linear interpolation of adjacent node values to face positions
+    
+    arithmeticMean - interpolate node values to face values via arithmetic averaging
+    
+    geometricMean - interpolate node values to face values via geometric averaging
+
+    harmonicMean - interpolate node values to face values via harmonic averaging
+    
+    upwindMean - interpolate node values to face value based on local background velocity at face position
+    
+    tvdMean - NotImplemented
+"""
 import numpy as np
 from .versioning import *
 from .mesh import *
@@ -19,7 +36,37 @@ def cell_size_array(m: MeshStructure):
         dz = m.cellsize.z[np.newaxis,np.newaxis,:]
         return dx, dy, dz
 
+    
 def linearMean(phi: CellVariable) -> FaceVariable:
+    """
+    Linearly interpolate a mesh-variable defined on mesh-nodes to mesh-faces.   
+    
+    This function gets the value of the field variable phi defined over the MeshStructure and calculates the value on the cell faces via linear interpolation, for a uniform Mesh.  
+
+    Parameters
+    ----------
+    phi : {CellVariable object}
+        Variable defined at mesh-nodes
+
+    Returns
+    -------
+    out : {FaceVariable object}
+        Interpolated node values at face positions
+
+    See Also
+    --------
+    arithmeticMean : interpolate node values to face values via arithmetic averaging of node values
+    geometricMean : interpolate node values to face values via geometric averaging of node values
+    harmonicMean : interpolate node values to face values via harmonic averaging of node values
+
+    Notes
+    -----
+
+    Examples
+    --------
+    >>>     
+    
+    """    
     # calculates the average values of a cell variable. The output is a
     # face variable
     if issubclass(type(phi.domain), Mesh1D):
@@ -47,7 +94,47 @@ def linearMean(phi: CellVariable) -> FaceVariable:
                      (dz[:,:,1:]*phi.value[1:-1, 1:-1, 0:-1]+dz[:,:,0:-1] *
                       phi.value[1:-1, 1:-1, 1:])/(dz[:,:,0:-1]+dz[:,:,1:]))
 
+    
 def arithmeticMean(phi: CellVariable):
+    """
+    Interpolate a mesh-variable defined on mesh-nodes to mesh-faces by arithmetic averaging adjacent node values.   
+    
+    This function gets the value of the field variable phi defined over the MeshStructure and calculates the arithmetic average on the cell faces, for a uniform Mesh. 
+            phi[face] = 1/#_adjacent_nodes * \sum(phi[adjacent nodes]) 
+                --> 
+            phi[face] = 0.5 * (phi[face-0.5*dx] + phi[face+0.5*dx])
+                --> 
+            phi[face] =  (cell_width[-]*phi[-] + cell_width[+]*phi[+])/(cell_width[-]+cell_width[+])
+            
+
+    Parameters
+    ----------
+    phi : {CellVariable object}
+        Variable defined at mesh-nodes
+
+    Returns
+    -------
+    out : {FaceVariable object}
+        Arithmetic average of node values
+
+    See Also
+    --------
+    linearMean : estimate node values to face values via linear-interpolation of node values
+    geometricMean : interpolate node values to face values via geometric averaging of node values
+    harmonicMean : interpolate node values to face values via harmonic averaging of node values
+
+    Notes
+    -----
+    The arithmetic mean emphasizes (is sensitive to) outliers with large values.
+    
+    Weighting the average by the cell length in the appropriate dimension is necessary for multi-dimensional grids, and is a necessary step in the extension to non-uniform grid spacing in 1-dimension. 
+
+    Examples
+    --------
+    >>>     
+    
+    """
+    
     # calculates the average values of a cell variable. The output is a
     # face variable
     if issubclass(type(phi.domain), Mesh1D):
@@ -69,7 +156,52 @@ def arithmeticMean(phi: CellVariable):
             (dy[:,0:-1]*phi.value[1:-1,0:-1,1:-1]+dy[:,1:]*phi.value[1:-1,1:,1:-1])/(dy[:,0:-1]+dy[:,1:]),
             (dz[:,:,0:-1]*phi.value[1:-1,1:-1,0:-1]+dz[:,:,1:]*phi.value[1:-1,1:-1,1:])/(dz[:,:,0:-1]+dz[:,:,1:]))
 
+    
 def geometricMean(phi: CellVariable):
+    """
+    Interpolate a mesh-variable defined on mesh-nodes to mesh-faces by geometric averaging adjacent node values.   
+    
+    This function gets the value of the field variable phi defined over the MeshStructure and calculates the geometric average on the cell faces, for a uniform Mesh. 
+            phi[face] = ( \prod(phi_nodes) )^(1/#_adjacent_nodes)
+                --> 
+            phi[face] = (phi[face-0.5*dx]*phi[face+0.5*dx])^(0.5)
+                --> 
+            phi[face] =  exp(
+                    ( cell_width[-] * ln(phi[-]) + cell_width[+] * ln(phi[+]) ) / ( cell_width[-] + cell_width[+] )
+                )
+
+    Parameters
+    ----------
+    phi : {CellVariable object}
+        Variable defined at mesh-nodes
+
+    Returns
+    -------
+    out : {FaceVariable object}
+        Geometric mean of node values at face positions
+
+    See Also
+    --------
+    linearMean : estimate node values to face values via linear-interpolation of node values    
+    arithmeticMean : interpolate node values to face values via arithmetic averaging of node values
+    harmonicMean : interpolate node values to face values via harmonic averaging of node values
+
+    Notes
+    -----
+    The geometric mean is equivalent to the arithmetic mean on a log-scale. 
+                phi_face = ( \prod(phi_nodes) )^(1/N_nodes)
+                         = exp( ln( arithmeticMean(...) ) )
+
+    It is always intermediate to the harmonic or arithmetic means, and tends to the central value of th eset by 'weight'.
+
+    Weighting the average by the cell length in the appropriate dimension is necessary for multi-dimensional grids, and is a necessary step in the extension to non-uniform grid spacing in 1-dimension. 
+
+    Examples
+    --------
+    >>>     
+    
+    """
+    
     # calculates the average values of a cell variable. The output is a
     # face variable
     if issubclass(type(phi.domain), Mesh1D):
@@ -97,8 +229,46 @@ def geometricMean(phi: CellVariable):
             np.exp((dx[0:-1]*np.log(phi.value[0:-1,1:-1,1:-1])+dx[1:]*np.log(phi.value[1:,1:-1,1:-1]))/(dx[1:]+dx[0:-1])),
             np.exp((dy[:,0:-1]*np.log(phi.value[1:-1,0:-1,1:-1])+dy[:,1:]*np.log(phi.value[1:-1,1:,1:-1]))/(dy[:,0:-1]+dy[:,1:])),
             np.exp((dz[:,:,0:-1]*np.log(phi.value[1:-1,1:-1,0:-1])+dz[:,:,1:]*np.log(phi.value[1:-1,1:-1,1:]))/(dz[:,:,0:-1]+dz[:,:,1:])))
+    
+    
 
 def harmonicMean(phi: CellVariable):
+    """
+    Interpolate a mesh-variable defined on mesh-nodes to mesh-faces by harmonic averaging adjacent node values.   
+    
+    This function gets the value of the field variable phi defined over the MeshStructure and calculates the harmonic average on the cell faces, for a uniform Mesh. 
+            phi[face] = \sum(1.0/phi_nodes)^(-1)
+                --> 
+            phi[face] = (1/phi[face-0.5*dx] + 1/phi[face+0.5*dx])^(-1)
+                --> 
+            phi[face] = ( cell_width[-] + cell_width[+] ) / (  cell_width[-]/phi[-] + cell_width[+]/phi[+]  ) 
+
+    Parameters
+    ----------
+    phi : {CellVariable object}
+        Variable defined at mesh-nodes
+
+    Returns
+    -------
+    out : {FaceVariable object}
+        Harmonic average of node values
+
+    See Also
+    --------
+    linearMean : estimate node values to face values via linear-interpolation of node values    
+    geometricMean : interpolate node values to face values via geometric averaging of node values
+    arithmeticMean : interpolate node values to face values via arithmetic averaging of node values
+
+    Notes
+    -----
+    The harmonic mean emphasizes (is sensitive to) outliers with small values.
+
+    Examples
+    --------
+    >>>     
+    
+    """
+    
     # calculates the average values of a cell variable. The output is a
     # face variable
 
@@ -127,8 +297,45 @@ def harmonicMean(phi: CellVariable):
             phi.value[1:,1:-1,1:-1]*phi.value[0:-1,1:-1,1:-1]*(dx[1:]+dx[0:-1])/(dx[1:]*phi.value[0:-1,1:-1,1:-1]+dx[0:-1]*phi.value[1:,1:-1,1:-1]),
             phi.value[1:-1,1:,1:-1]*phi.value[1:-1,0:-1,1:-1]*(dy[:,0:-1]+dy[:,1:])/(dy[:,1:]*phi.value[1:-1,0:-1,1:-1]+dy[:,0:-1]*phi.value[1:-1,1:,1:-1]),
             phi.value[1:-1,1:-1,1:]*phi.value[1:-1,1:-1,0:-1]*(dz[:,:,0:-1]+dz[:,:,1:])/(dz[:,:,1:]*phi.value[1:-1,1:-1,0:-1]+dz[:,:,0:-1]*phi.value[1:-1,1:-1,1:]))
-
+    
+    
 def upwindMean(phi: CellVariable, u: FaceVariable):
+    """
+    Interpolate a mesh-variable defined on mesh-nodes to mesh-faces by matching the node value carried by the flow.   
+    
+    This function gets the value of the field variable phi defined over the MeshStructure and determines the value on the cell faces by applying a zeroeth order hold in the direction of the flow. 
+            phi[face] = phi[adjacent node from flow]
+
+    Parameters
+    ----------
+    phi : {CellVariable object}
+        Variable defined at mesh-nodes
+        
+    u : {FaceVariable object}
+        Flow-velocity at mesh-faces    
+
+    Returns
+    -------
+    out : {FaceVariable object}
+        Zeroeth order hold in flow direction
+
+    See Also
+    --------
+    linearMean : estimate node values to face values via linear-interpolation of node values    
+    arithmeticMean : interpolate node values to face values via arithmetic averaging of node values    
+    geometricMean : interpolate node values to face values via geometric averaging of node values
+    harmonicMean : interpolate node values to face values via harmonic averaging of node values
+
+    Notes
+    -----
+    The upwind mean determines the direction of information flow based on the current local value of the background flow.
+
+    Examples
+    --------
+    >>>     
+    
+    """    
+    
     # calculates the average values of a cell variable. The output is a
     # face variable
     # TBD: needs to be fixed. It must be a linear mean, adjusted for velocity
@@ -194,6 +401,37 @@ def upwindMean(phi: CellVariable, u: FaceVariable):
 
 # ================== TVD averaging scheme ==================
 def tvdMean(phi: CellVariable, u: FaceVariable, FL):
+    """
+    Interpolate a mesh-variable defined on mesh-nodes to mesh-faces by matching the node value carried by the flow on a grid with a Total Variation Diminishing (TVD) discretization.   
+    
+    This function gets the value of the field variable phi defined over the MeshStructure and determines the value on the cell faces by applying a flow-weighted average / including a linearization of the local flow (first order hold in the direction of the flow). 
+
+    Parameters
+    ----------
+    phi : {CellVariable object}
+        Variable defined at mesh-nodes
+        
+    u : {FaceVariable object}
+        Flow-velocity at mesh-faces    
+
+    Returns
+    -------
+    out : {FaceVariable object}
+        Interpolated value of phi at the mesh-faces
+
+    See Also
+    --------
+    upwindMean :  determines the direction of information flow based on the current local value of the background flow.
+
+    Notes
+    -----
+    The TVD mean determines the direction of information flow based on a local linearization of the current local value of the background velocity. s. https://en.wikipedia.org/wiki/Total_variation_diminishing
+
+    Examples
+    --------
+    >>>     
+    
+    """        
     raise Exception("tvdMean is not implemented yet!")
 #     # u is a face variable
 #     # phi is a cell variable
