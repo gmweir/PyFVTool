@@ -5,4 +5,10 @@
 .ipynb_checkpoints/
 vscode/
 build/
+
+# Git is case-sensitive on some operating systems
 PyFVTool.egg-info/
+pyfvtool.egg-info/
+
+# during development/translation I will put these under the gitignore to keep what I am working on obvious 
+# examples/Tutorial
